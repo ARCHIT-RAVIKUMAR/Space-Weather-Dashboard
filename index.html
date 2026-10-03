@@ -48,7 +48,7 @@ a{color:var(--acc)}
 <body>
 <header><div class="wrap">
 <h1>Space Weather Dashboard</h1>
-<div class="meta"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
+<div class="meta"><span class="dot" id="dot"></span><span id="status">Loading…</span><div class="mono" id="dbg" style="margin-top:4px;font-size:11px;word-break:break-all"></div></div>
 </div></header>
 
 <main><div class="wrap">
@@ -83,7 +83,7 @@ a{color:var(--acc)}
 </div></div></main>
 
 <footer><div class="wrap">
-Data: NOAA Space Weather Prediction Center (services.swpc.noaa.gov), public JSON feeds, refreshed every 5 minutes. Solar wind values are averaged over 5-minute windows. Readings can lag by a few minutes. This is an informational display, not an official forecast.
+Data: NOAA Space Weather Prediction Center (services.swpc.noaa.gov), public JSON feeds, refreshed every 5 minutes. Solar wind values are averaged over 5-minute windows. Build 6. Readings can lag by a few minutes. This is an informational display, not an official forecast.
 </div></footer>
 
 <script>
@@ -105,29 +105,29 @@ function sample(){
     {t:now-9e7,m:'ALERT: Type II radio emission'}],live:false};
 }
 
-async function jf(...ps){for(const p of ps){try{return await j(p)}catch(e){}}throw new Error('all failed')}
-async function j(p){const r=await fetch(API+p,{cache:'no-store'});if(!r.ok)throw 0;return r.json()}
+async function jf(...ps){let err;for(const p of ps){try{return await j(p)}catch(e){err=e}}throw err}
+async function j(p){const r=await fetch(API+p,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status+' '+p);return r.json()}
 function tbl(a){if(!Array.isArray(a[0]))return a;const h=a[0],o=h.reduce((m,k,i)=>(m[k]=i,m),{});return a.slice(1).map(r=>{const x={};for(const k in o)x[k]=r[o[k]];return x})}
-const ds=(a,n=5)=>{const o=[];for(let i=0;i<a.length;i+=n){const c=a.slice(i,i+n);o.push({t:c[c.length-1].t,v:c.reduce((s,x)=>s+x.v,0)/c.length})}return o};
+const ds=(a,n=a.length>1000?5:1)=>{const o=[];for(let i=0;i<a.length;i+=n){const c=a.slice(i,i+n);o.push({t:c[c.length-1].t,v:c.reduce((s,x)=>s+x.v,0)/c.length})}return o};
 const T=s=>Date.parse(s.replace(' ','T')+(/Z|\+/.test(s)?'':'Z'));
 
 async function load(){
   const S=sample(),names=['Kp','plasma','mag','xray','indices','alerts'];
-  const paths=['products/noaa-planetary-k-index.json',['products/solar-wind/plasma-1-day.json','products/solar-wind/plasma-6-hour.json'],['products/solar-wind/mag-1-day.json','products/solar-wind/mag-6-hour.json'],'json/goes/primary/xrays-6-hour.json','json/solar-cycle/observed-solar-cycle-indices.json','products/alerts.json'];
-  const res=await Promise.allSettled(paths.map(p=>jf(...[].concat(p)))),ok=res.map(r=>r.status==='fulfilled'?r.value:null),bad=[];
+  const paths=['products/noaa-planetary-k-index.json',['json/rtsw/rtsw_wind_1m.json','text/rtsw/data/plasma-1-day-5-minute.json'],['json/rtsw/rtsw_mag_1m.json','text/rtsw/data/mag-1-day-5-minute.json'],'json/goes/primary/xrays-6-hour.json','json/solar-cycle/observed-solar-cycle-indices.json','products/alerts.json'];
+  const res=await Promise.allSettled(paths.map(p=>jf(...[].concat(p)))),ok=res.map(r=>r.status==='fulfilled'?r.value:null),bad=[],dbg=[];
   res.forEach((r,i)=>{if(r.status==='rejected')console.error('Feed failed:',paths[i])});
-  const safe=(i,fn,fb)=>{try{if(!ok[i])throw 0;const v=fn(ok[i]);if(v==null||(Array.isArray(v)&&!v.length))throw 0;return v}catch(e){console.error('Parse problem:',names[i],e,ok[i]&&ok[i].slice&&ok[i].slice(0,2));bad.push(names[i]);return fb}};
+  const safe=(i,fn,fb)=>{try{if(!ok[i])throw 0;const v=fn(ok[i]);if(v==null||(Array.isArray(v)&&!v.length))throw 0;return v}catch(e){const why=ok[i]?'parse error: '+(e&&e.message||e)+' | first rows: '+JSON.stringify(ok[i].slice(0,2)).slice(0,200):'download failed: '+(res[i].reason&&res[i].reason.message);console.error(names[i],why);dbg.push(names[i]+' -> '+why);bad.push(names[i]);return fb}};
   D={
     kp:safe(0,k=>(Array.isArray(k[0])?tbl(k):k).slice(-24).map(x=>({t:T(x.time_tag),v:+(x.Kp??x.kp_index)})),S.kp),
-    sw:safe(1,pl=>ds(tbl(pl).filter(x=>(x.speed??x.proton_speed)!=null).slice(-1440).map(x=>({t:T(x.time_tag),v:+(x.speed??x.proton_speed)}))),S.sw),
-    dn:safe(1,pl=>{const p=tbl(pl).filter(x=>(x.density??x.proton_density)!=null);const l=p[p.length-1];return +(l.density??l.proton_density)},S.dn),
-    bz:safe(2,mg=>ds(tbl(mg).filter(x=>(x.bz_gsm??x.bz)!=null).slice(-1440).map(x=>({t:T(x.time_tag),v:+(x.bz_gsm??x.bz)}))),S.bz),
+    sw:safe(1,pl=>ds(tbl(pl).filter(x=>x.active!==false&&(x.speed??x.proton_speed)!=null).slice(-1440).map(x=>({t:T(x.time_tag),v:+(x.speed??x.proton_speed)}))),S.sw),
+    dn:safe(1,pl=>{const p=tbl(pl).filter(x=>x.active!==false&&(x.density??x.proton_density)!=null);const l=p[p.length-1];return +(l.density??l.proton_density)},S.dn),
+    bz:safe(2,mg=>ds(tbl(mg).filter(x=>x.active!==false&&(x.bz_gsm??x.bz)!=null).slice(-1440).map(x=>({t:T(x.time_tag),v:+(x.bz_gsm??x.bz)}))),S.bz),
     xr:safe(3,xr=>xr.filter(x=>x.energy==='0.1-0.8nm'&&x.flux>0).map(x=>({t:T(x.time_tag),v:+x.flux})),S.xr),
     ssn:safe(4,ci=>{const l=ci[ci.length-1];return{v:Math.round(l.ssn),t:l['time-tag']}},S.ssn),
     f107:safe(4,ci=>Math.round(ci[ci.length-1]['f10.7']),S.f107),
     alerts:safe(5,al=>al.slice(0,5).map(a=>({t:T(a.issue_datetime),m:(a.message.split(/\r?\n/).find(l=>/^(ALERT|WATCH|WARNING|SUMMARY|CONTINUED ALERT|EXTENDED WARNING):/.test(l))||'Bulletin').trim()})),S.alerts)
   };
-  D.failed=[...new Set(bad)];D.live=D.failed.length<names.length;
+  D.failed=[...new Set(bad)];D.dbg=[...new Set(dbg)];D.live=D.failed.length<names.length;
   render();
 }
 
@@ -184,6 +184,7 @@ function render(){
   line('sChart',D.sw,{c:css('--acc')});
   line('bChart',D.bz,{zero:true,c:css('--mute')});
   $('ev').innerHTML=D.alerts.map(a=>`<tr><td class="mono">${fmt(a.t)}</td><td>${a.m.replace(/</g,'&lt;')}</td></tr>`).join('');
+  $('dbg').textContent=(D.dbg||[]).join('  ||  ');
   $('dot').className='dot'+(D.live?' live':'');
   const t=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   $('status').textContent=!D.live?'Sample data (live feed unreachable from this page)':D.failed.length?'Live NOAA data · sample used for: '+D.failed.join(', '):'Live NOAA SWPC data · updated '+t;
