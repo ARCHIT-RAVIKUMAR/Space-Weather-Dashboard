@@ -83,7 +83,7 @@ a{color:var(--acc)}
 </div></div></main>
 
 <footer><div class="wrap">
-Data: NOAA Space Weather Prediction Center (services.swpc.noaa.gov), public JSON feeds, refreshed every 5 minutes. Solar wind values are averaged over 5-minute windows. Build 6. Readings can lag by a few minutes. This is an informational display, not an official forecast.
+Data: NOAA Space Weather Prediction Center (services.swpc.noaa.gov), public JSON feeds, refreshed every 5 minutes. Solar wind values are averaged over 5-minute windows. Readings can lag by a few minutes. This is an informational display, not an official forecast.
 </div></footer>
 
 <script>
@@ -139,21 +139,22 @@ const kpCol=v=>v>=5?css('--bad'):v>=4?css('--warn'):css('--ok');
 function kpLabel(v){return v>=5?'Storm level G'+Math.min(5,Math.floor(v)-4):v>=4?'Active':v>=3?'Unsettled':'Quiet'}
 const fmt=t=>new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
+const nice=(lo,hi)=>{const r=hi-lo,p=Math.pow(10,Math.floor(Math.log10(r/3))),m=r/3/p,st=(m<1.5?1:m<3.5?2:m<7.5?5:10)*p,o=[];for(let v=Math.ceil(lo/st)*st;v<=hi;v+=st)o.push(+v.toFixed(6));return o};
 function line(id,d,o){
   const W=600,H=170,L=44,R=8,Tp=8,B=22,svg=$(id);
   const ys=d.map(x=>o.log?Math.log10(x.v):x.v);
   let lo=o.min??Math.min(...ys),hi=o.max??Math.max(...ys);if(hi===lo)hi=lo+1;
   const pad=(hi-lo)*.08;if(o.min==null)lo-=pad;if(o.max==null)hi+=pad;
-  const t0=d[0].t,t1=d[d.length-1].t,X=t=>L+(t-t0)/(t1-t0||1)*(W-L-R),Y=v=>Tp+(1-(v-lo)/(hi-lo))*(H-Tp-B);
+  const t0=d[0].t,t1=d[d.length-1].t,ft=t=>new Date(t).toLocaleString([], (t1-t0>432e5?{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}:{hour:'2-digit',minute:'2-digit'})),X=t=>L+(t-t0)/(t1-t0||1)*(W-L-R),Y=v=>Tp+(1-(v-lo)/(hi-lo))*(H-Tp-B);
   let s='';
-  (o.ticks||[0,.5,1].map(f=>lo+f*(hi-lo))).forEach(v=>{
+  (o.ticks||nice(lo,hi)).forEach(v=>{
     const lb=o.log?'1e'+Math.round(v):(Math.abs(v)>=100?Math.round(v):+v.toFixed(1));
     s+=`<line class="gl" x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L-6}" y="${Y(v)+3}" text-anchor="end">${lb}</text>`});
   if(o.zero&&lo<0&&hi>0)s+=`<line x1="${L}" x2="${W-R}" y1="${Y(0)}" y2="${Y(0)}" stroke="${css('--mute')}" stroke-dasharray="3 3"/>`;
   if(o.bands)o.bands.forEach(b=>{s+=`<line x1="${L}" x2="${W-R}" y1="${Y(b[0])}" y2="${Y(b[0])}" stroke="${css('--warn')}" stroke-dasharray="2 4" opacity=".7"/><text class="ax" x="${W-R}" y="${Y(b[0])-3}" text-anchor="end">${b[1]}</text>`});
   const pts=d.map((x,i)=>X(x.t).toFixed(1)+','+Y(ys[i]).toFixed(1)).join(' ');
   s+=`<polyline fill="none" stroke="${o.c||css('--acc')}" stroke-width="1.6" stroke-linejoin="round" points="${pts}"/>`;
-  s+=`<text class="ax" x="${L}" y="${H-5}">${new Date(t0).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</text><text class="ax" x="${W-R}" y="${H-5}" text-anchor="end">${new Date(t1).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</text>`;
+  s+=`<text class="ax" x="${L}" y="${H-5}">${ft(t0)}</text><text class="ax" x="${W-R}" y="${H-5}" text-anchor="end">${ft(t1)}</text>`;
   svg.innerHTML=s;
 }
 
@@ -170,7 +171,7 @@ function render(){
   const kp=D.kp[D.kp.length-1].v,sw=D.sw[D.sw.length-1],bz=D.bz[D.bz.length-1],xr=D.xr[D.xr.length-1];
   const kpEl=$('kp');kpEl.textContent=kp.toFixed(kp%1?2:0);kpEl.style.color=kpCol(kp);$('kpSub').textContent=kpLabel(kp)+' · scale 0–9';
   $('sp').firstChild.textContent=Math.round(sw.v);
-  $('spSub').textContent=sw.v>600?'High-speed stream':sw.v>450?'Elevated':'Near background (~400)';
+  $('spSub').textContent=sw.v>600?'High-speed stream':sw.v>450?'Elevated':sw.v<350?'Slow wind':'Near background (~400)';
   $('bz').firstChild.textContent=bz.v.toFixed(1);$('bz').style.color=bz.v<-5?css('--bad'):'';
   $('bzSub').textContent=bz.v<-5?'Strongly southward, storm-driving':bz.v<0?'Southward':'Northward';
   const f=flare(xr.v),mx=Math.max(...D.xr.map(x=>x.v));
