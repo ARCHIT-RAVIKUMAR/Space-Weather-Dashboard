@@ -105,22 +105,23 @@ function sample(){
     {t:now-9e7,m:'ALERT: Type II radio emission'}],live:false};
 }
 
+async function jf(...ps){for(const p of ps){try{return await j(p)}catch(e){}}throw new Error('all failed')}
 async function j(p){const r=await fetch(API+p,{cache:'no-store'});if(!r.ok)throw 0;return r.json()}
-function tbl(a){const h=a[0],o=h.reduce((m,k,i)=>(m[k]=i,m),{});return a.slice(1).map(r=>{const x={};for(const k in o)x[k]=r[o[k]];return x})}
+function tbl(a){if(!Array.isArray(a[0]))return a;const h=a[0],o=h.reduce((m,k,i)=>(m[k]=i,m),{});return a.slice(1).map(r=>{const x={};for(const k in o)x[k]=r[o[k]];return x})}
 const ds=(a,n=5)=>{const o=[];for(let i=0;i<a.length;i+=n){const c=a.slice(i,i+n);o.push({t:c[c.length-1].t,v:c.reduce((s,x)=>s+x.v,0)/c.length})}return o};
 const T=s=>Date.parse(s.replace(' ','T')+(/Z|\+/.test(s)?'':'Z'));
 
 async function load(){
   const S=sample(),names=['Kp','plasma','mag','xray','indices','alerts'];
-  const paths=['products/noaa-planetary-k-index.json','products/solar-wind/plasma-1-day.json','products/solar-wind/mag-1-day.json','json/goes/primary/xrays-6-hour.json','json/solar-cycle/observed-solar-cycle-indices.json','products/alerts.json'];
-  const res=await Promise.allSettled(paths.map(j)),ok=res.map(r=>r.status==='fulfilled'?r.value:null),bad=[];
+  const paths=['products/noaa-planetary-k-index.json',['products/solar-wind/plasma-1-day.json','products/solar-wind/plasma-6-hour.json'],['products/solar-wind/mag-1-day.json','products/solar-wind/mag-6-hour.json'],'json/goes/primary/xrays-6-hour.json','json/solar-cycle/observed-solar-cycle-indices.json','products/alerts.json'];
+  const res=await Promise.allSettled(paths.map(p=>jf(...[].concat(p)))),ok=res.map(r=>r.status==='fulfilled'?r.value:null),bad=[];
   res.forEach((r,i)=>{if(r.status==='rejected')console.error('Feed failed:',paths[i])});
-  const safe=(i,fn,fb)=>{try{if(!ok[i])throw 0;const v=fn(ok[i]);if(v==null||(Array.isArray(v)&&!v.length))throw 0;return v}catch(e){bad.push(names[i]);return fb}};
+  const safe=(i,fn,fb)=>{try{if(!ok[i])throw 0;const v=fn(ok[i]);if(v==null||(Array.isArray(v)&&!v.length))throw 0;return v}catch(e){console.error('Parse problem:',names[i],e,ok[i]&&ok[i].slice&&ok[i].slice(0,2));bad.push(names[i]);return fb}};
   D={
     kp:safe(0,k=>(Array.isArray(k[0])?tbl(k):k).slice(-24).map(x=>({t:T(x.time_tag),v:+(x.Kp??x.kp_index)})),S.kp),
-    sw:safe(1,pl=>ds(tbl(pl).filter(x=>x.speed!=null).slice(-1440).map(x=>({t:T(x.time_tag),v:+x.speed}))),S.sw),
-    dn:safe(1,pl=>{const p=tbl(pl).filter(x=>x.density!=null);return +p[p.length-1].density},S.dn),
-    bz:safe(2,mg=>ds(tbl(mg).filter(x=>x.bz_gsm!=null).slice(-1440).map(x=>({t:T(x.time_tag),v:+x.bz_gsm}))),S.bz),
+    sw:safe(1,pl=>ds(tbl(pl).filter(x=>(x.speed??x.proton_speed)!=null).slice(-1440).map(x=>({t:T(x.time_tag),v:+(x.speed??x.proton_speed)}))),S.sw),
+    dn:safe(1,pl=>{const p=tbl(pl).filter(x=>(x.density??x.proton_density)!=null);const l=p[p.length-1];return +(l.density??l.proton_density)},S.dn),
+    bz:safe(2,mg=>ds(tbl(mg).filter(x=>(x.bz_gsm??x.bz)!=null).slice(-1440).map(x=>({t:T(x.time_tag),v:+(x.bz_gsm??x.bz)}))),S.bz),
     xr:safe(3,xr=>xr.filter(x=>x.energy==='0.1-0.8nm'&&x.flux>0).map(x=>({t:T(x.time_tag),v:+x.flux})),S.xr),
     ssn:safe(4,ci=>{const l=ci[ci.length-1];return{v:Math.round(l.ssn),t:l['time-tag']}},S.ssn),
     f107:safe(4,ci=>Math.round(ci[ci.length-1]['f10.7']),S.f107),
