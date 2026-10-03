@@ -60,8 +60,8 @@ a{color:var(--acc)}
 
   <div class="card wide"><div class="lbl">Kp, last 3 days (3-hour values)</div><svg id="kpChart" viewBox="0 0 600 170"></svg></div>
   <div class="card wide"><div class="lbl">Solar X-ray flux, last 6 hours (W/m²)</div><svg id="xChart" viewBox="0 0 600 170"></svg></div>
-  <div class="card wide"><div class="lbl">Solar wind speed, last 24 h (km/s)</div><svg id="sChart" viewBox="0 0 600 170"></svg></div>
-  <div class="card wide"><div class="lbl">Bz component, last 24 h (nT)</div><svg id="bChart" viewBox="0 0 600 170"></svg></div>
+  <div class="card wide"><div class="lbl" id="sT">Solar wind speed (km/s)</div><svg id="sChart" viewBox="0 0 600 170"></svg></div>
+  <div class="card wide"><div class="lbl" id="bT">Bz component (nT)</div><svg id="bChart" viewBox="0 0 600 170"></svg></div>
 
   <div class="card"><div class="lbl">Sunspot number (monthly)</div><div class="big mono" id="ssn">–</div><div class="sub" id="ssnSub"></div></div>
   <div class="card"><div class="lbl">Solar wind density</div><div class="big mono" id="dn">–<small>p/cm³</small></div><div class="sub">Protons per cubic centimetre</div></div>
@@ -83,7 +83,7 @@ a{color:var(--acc)}
 </div></div></main>
 
 <footer><div class="wrap">
-Data: NOAA Space Weather Prediction Center (services.swpc.noaa.gov), public JSON feeds, refreshed every 5 minutes. Solar wind values are averaged over 5-minute windows. Readings can lag by a few minutes. This is an informational display, not an official forecast.
+Data: NOAA Space Weather Prediction Center (services.swpc.noaa.gov), public JSON feeds, refreshed every 5 minutes. Solar wind values are averaged over 5-minute windows. Build 7. Readings can lag by a few minutes. This is an informational display, not an official forecast.
 </div></footer>
 
 <script>
@@ -145,7 +145,7 @@ function line(id,d,o){
   const ys=d.map(x=>o.log?Math.log10(x.v):x.v);
   let lo=o.min??Math.min(...ys),hi=o.max??Math.max(...ys);if(hi===lo)hi=lo+1;
   const pad=(hi-lo)*.08;if(o.min==null)lo-=pad;if(o.max==null)hi+=pad;
-  const t0=d[0].t,t1=d[d.length-1].t,ft=t=>new Date(t).toLocaleString([], (t1-t0>432e5?{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}:{hour:'2-digit',minute:'2-digit'})),X=t=>L+(t-t0)/(t1-t0||1)*(W-L-R),Y=v=>Tp+(1-(v-lo)/(hi-lo))*(H-Tp-B);
+  const t0=d[0].t,t1=d[d.length-1].t,ft=t=>new Date(t).toLocaleString([], (new Date(t0).toDateString()!==new Date(t1).toDateString()?{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}:{hour:'2-digit',minute:'2-digit'})),X=t=>L+(t-t0)/(t1-t0||1)*(W-L-R),Y=v=>Tp+(1-(v-lo)/(hi-lo))*(H-Tp-B);
   let s='';
   (o.ticks||nice(lo,hi)).forEach(v=>{
     const lb=o.log?'1e'+Math.round(v):(Math.abs(v)>=100?Math.round(v):+v.toFixed(1));
@@ -182,6 +182,8 @@ function render(){
   document.querySelector('main').classList.add('ready');
   kpBars();
   line('xChart',D.xr,{log:true,min:-8,max:-4,ticks:[-8,-7,-6,-5,-4],bands:[[-6,'C'],[-5,'M'],[-4,'X']]});
+  const hrs=a=>Math.max(1,Math.round((a[a.length-1].t-a[0].t)/36e5));
+  $('sT').textContent='Solar wind speed, last '+hrs(D.sw)+' h (km/s)';$('bT').textContent='Bz component, last '+hrs(D.bz)+' h (nT)';
   line('sChart',D.sw,{c:css('--acc')});
   line('bChart',D.bz,{zero:true,c:css('--mute')});
   $('ev').innerHTML=D.alerts.map(a=>`<tr><td class="mono">${fmt(a.t)}</td><td>${a.m.replace(/</g,'&lt;')}</td></tr>`).join('');
