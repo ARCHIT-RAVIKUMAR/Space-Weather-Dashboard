@@ -110,23 +110,22 @@ function tbl(a){const h=a[0],o=h.reduce((m,k,i)=>(m[k]=i,m),{});return a.slice(1
 const T=s=>Date.parse(s.replace(' ','T')+(/Z|\+/.test(s)?'':'Z'));
 
 async function load(){
-  try{
-    const [k,pl,mg,xr,ci,al]=await Promise.all([
-      j('products/noaa-planetary-k-index.json'),j('products/solar-wind/plasma-5-minute.json'),
-      j('products/solar-wind/mag-5-minute.json'),j('json/goes/primary/xrays-6-hour.json'),
-      j('json/solar-cycle/observed-solar-cycle-indices.json'),j('products/alerts.json')]);
-    const kpR=(Array.isArray(k[0])?tbl(k):k).slice(-24).map(x=>({t:T(x.time_tag),v:+(x.Kp??x.kp_index)}));
-    const p=tbl(pl).filter(x=>x.speed!=null),m=tbl(mg).filter(x=>x.bz_gsm!=null);
-    const last=ci[ci.length-1];
-    D={kp:kpR,
-      sw:p.slice(-288).map(x=>({t:T(x.time_tag),v:+x.speed})),
-      bz:m.slice(-288).map(x=>({t:T(x.time_tag),v:+x.bz_gsm})),
-      dn:+p[p.length-1].density,
-      xr:xr.filter(x=>x.energy==='0.1-0.8nm'&&x.flux>0).map(x=>({t:T(x.time_tag),v:+x.flux})),
-      ssn:{v:Math.round(last.ssn),t:last['time-tag']},f107:Math.round(last['f10.7']),
-      alerts:al.slice(0,5).map(a=>({t:T(a.issue_datetime),m:(a.message.split(/\r?\n/).find(l=>/^(ALERT|WATCH|WARNING|SUMMARY|CONTINUED ALERT|EXTENDED WARNING):/.test(l))||'Bulletin').trim()})),
-      live:true};
-  }catch(e){D=D&&D.live?D:sample()}
+  const S=sample(),names=['Kp','plasma','mag','xray','indices','alerts'];
+  const paths=['products/noaa-planetary-k-index.json','products/solar-wind/plasma-5-minute.json','products/solar-wind/mag-5-minute.json','json/goes/primary/xrays-6-hour.json','json/solar-cycle/observed-solar-cycle-indices.json','products/alerts.json'];
+  const res=await Promise.allSettled(paths.map(j)),ok=res.map(r=>r.status==='fulfilled'?r.value:null),bad=[];
+  res.forEach((r,i)=>{if(r.status==='rejected')console.error('Feed failed:',paths[i])});
+  const safe=(i,fn,fb)=>{try{if(!ok[i])throw 0;const v=fn(ok[i]);if(v==null||(Array.isArray(v)&&!v.length))throw 0;return v}catch(e){bad.push(names[i]);return fb}};
+  D={
+    kp:safe(0,k=>(Array.isArray(k[0])?tbl(k):k).slice(-24).map(x=>({t:T(x.time_tag),v:+(x.Kp??x.kp_index)})),S.kp),
+    sw:safe(1,pl=>tbl(pl).filter(x=>x.speed!=null).slice(-288).map(x=>({t:T(x.time_tag),v:+x.speed})),S.sw),
+    dn:safe(1,pl=>{const p=tbl(pl).filter(x=>x.density!=null);return +p[p.length-1].density},S.dn),
+    bz:safe(2,mg=>tbl(mg).filter(x=>x.bz_gsm!=null).slice(-288).map(x=>({t:T(x.time_tag),v:+x.bz_gsm})),S.bz),
+    xr:safe(3,xr=>xr.filter(x=>x.energy==='0.1-0.8nm'&&x.flux>0).map(x=>({t:T(x.time_tag),v:+x.flux})),S.xr),
+    ssn:safe(4,ci=>{const l=ci[ci.length-1];return{v:Math.round(l.ssn),t:l['time-tag']}},S.ssn),
+    f107:safe(4,ci=>Math.round(ci[ci.length-1]['f10.7']),S.f107),
+    alerts:safe(5,al=>al.slice(0,5).map(a=>({t:T(a.issue_datetime),m:(a.message.split(/\r?\n/).find(l=>/^(ALERT|WATCH|WARNING|SUMMARY|CONTINUED ALERT|EXTENDED WARNING):/.test(l))||'Bulletin').trim()})),S.alerts)
+  };
+  D.failed=[...new Set(bad)];D.live=D.failed.length<names.length;
   render();
 }
 
@@ -183,7 +182,8 @@ function render(){
   line('bChart',D.bz,{zero:true,c:css('--mute')});
   $('ev').innerHTML=D.alerts.map(a=>`<tr><td class="mono">${fmt(a.t)}</td><td>${a.m.replace(/</g,'&lt;')}</td></tr>`).join('');
   $('dot').className='dot'+(D.live?' live':'');
-  $('status').textContent=D.live?'Live NOAA SWPC data · updated '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'Sample data (live feed unreachable from this page)';
+  const t=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  $('status').textContent=!D.live?'Sample data (live feed unreachable from this page)':D.failed.length?'Live NOAA data · sample used for: '+D.failed.join(', '):'Live NOAA SWPC data · updated '+t;
 }
 load();setInterval(load,3e5);
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>D&&render());
