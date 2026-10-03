@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Space Weather Dashboard</title>
+<style>
+:root{--bg:#f4f3ef;--card:#fff;--ink:#1c1e22;--mute:#666b73;--line:#dcdad3;--ok:#2f7d4f;--warn:#b7791f;--bad:#b83a32;--acc:#c2570c;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111316;--card:#1a1d21;--ink:#e6e4de;--mute:#8b9097;--line:#2c3036;--ok:#5cb985;--warn:#e0a63a;--bad:#e5645b;--acc:#f0883e}}
+:root[data-theme="dark"]{--bg:#111316;--card:#1a1d21;--ink:#e6e4de;--mute:#8b9097;--line:#2c3036;--ok:#5cb985;--warn:#e0a63a;--bad:#e5645b;--acc:#f0883e}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+header{border-bottom:1px solid var(--line);padding:18px 20px}
+.wrap{max-width:1100px;margin:0 auto}
+header .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;justify-content:space-between}
+h1{font-size:19px;margin:0;font-weight:650;letter-spacing:.01em}
+.meta{font-size:12.5px;color:var(--mute)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mute);margin-right:6px}
+.dot.live{background:var(--ok)}
+main{padding:20px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(4,1fr)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
+.lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin-bottom:6px}
+.big{font-size:30px;font-weight:600;line-height:1.1}
+.big small{font-size:13px;font-weight:400;color:var(--mute);margin-left:4px}
+.sub{font-size:13px;color:var(--mute);margin-top:6px}
+.wide{grid-column:span 2}
+.full{grid-column:1/-1}
+svg{width:100%;height:auto;display:block}
+.ax{fill:var(--mute);font-size:10px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.gl{stroke:var(--line);stroke-width:1}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+td{padding:7px 0;border-top:1px solid var(--line);vertical-align:top}
+td:first-child{white-space:nowrap;color:var(--mute);padding-right:14px;width:1%}
+h2{font-size:15px;margin:0 0 8px}
+.impacts{display:grid;gap:14px;grid-template-columns:repeat(2,1fr)}
+.impacts p{margin:0 0 .6em;color:var(--mute);font-size:14px}
+.impacts b{color:var(--ink)}
+footer{padding:8px 20px 28px;font-size:12.5px;color:var(--mute)}
+a{color:var(--acc)}
+@media (max-width:860px){.grid{grid-template-columns:repeat(2,1fr)}.impacts{grid-template-columns:1fr}}
+@media (max-width:520px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.big{font-size:27px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<h1>Space Weather Dashboard</h1>
+<div class="meta"><span class="dot" id="dot"></span><span id="status">Loading…</span></div>
+</div></header>
+
+<main><div class="wrap">
+<div class="grid">
+  <div class="card"><div class="lbl">Planetary Kp index</div><div class="big mono" id="kp">–</div><div class="sub" id="kpSub"></div></div>
+  <div class="card"><div class="lbl">Solar wind speed</div><div class="big mono" id="sp">–<small>km/s</small></div><div class="sub" id="spSub"></div></div>
+  <div class="card"><div class="lbl">IMF Bz (southward = bad)</div><div class="big mono" id="bz">–<small>nT</small></div><div class="sub" id="bzSub"></div></div>
+  <div class="card"><div class="lbl">X-ray flare class (GOES)</div><div class="big mono" id="fl">–</div><div class="sub" id="flSub"></div></div>
+
+  <div class="card wide"><div class="lbl">Kp, last 3 days (3-hour values)</div><svg id="kpChart" viewBox="0 0 600 170"></svg></div>
+  <div class="card wide"><div class="lbl">Solar X-ray flux, last 6 hours (W/m²)</div><svg id="xChart" viewBox="0 0 600 170"></svg></div>
+  <div class="card wide"><div class="lbl">Solar wind speed, last 24 h (km/s)</div><svg id="sChart" viewBox="0 0 600 170"></svg></div>
+  <div class="card wide"><div class="lbl">Bz component, last 24 h (nT)</div><svg id="bChart" viewBox="0 0 600 170"></svg></div>
+
+  <div class="card"><div class="lbl">Sunspot number (monthly)</div><div class="big mono" id="ssn">–</div><div class="sub" id="ssnSub"></div></div>
+  <div class="card"><div class="lbl">Solar wind density</div><div class="big mono" id="dn">–<small>p/cm³</small></div><div class="sub">Protons per cubic centimetre</div></div>
+  <div class="card wide"><div class="lbl">Recent alerts &amp; events</div><table id="ev"></table></div>
+
+  <div class="card full">
+    <h2>Why it matters</h2>
+    <div class="impacts">
+      <div>
+        <p><b>Satellites.</b> Energetic particles from flares and coronal mass ejections (CMEs) can upset onboard electronics. During storms, the upper atmosphere heats and expands, increasing drag on low-orbit satellites. In February 2022, SpaceX lost around 38 newly launched Starlink satellites to a minor storm for exactly this reason.</p>
+        <p><b>Radio &amp; GPS.</b> X-ray bursts ionise the sunlit side of the ionosphere and can black out HF radio used by aviation and ships. Disturbed ionosphere also degrades GNSS accuracy, which affects surveying, farming and aircraft approach systems.</p>
+      </div>
+      <div>
+        <p><b>Power grids.</b> Rapidly changing magnetic fields induce currents in long conductors. Strong storms can overload transformers, as in the 1989 Quebec blackout, which left millions without power for about nine hours.</p>
+        <p><b>Astronauts.</b> Outside Earth's magnetic shield, crews face higher radiation doses during solar particle events. Mission planners watch the S-scale and may move crews to better-shielded areas of the spacecraft. Aircrew on polar routes can be rerouted too.</p>
+      </div>
+    </div>
+  </div>
+</div></div></main>
+
+<footer><div class="wrap">
+Data: NOAA Space Weather Prediction Center public JSON services (services.swpc.noaa.gov). Values refresh every 5 minutes while the page is open. When the live feed can't be reached, the page shows a clearly labelled sample dataset instead.
+</div></footer>
+
+<script>
+const API='https://services.swpc.noaa.gov/';
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let D=null;
+
+function sample(){
+  const now=Date.now(),r=(n,f)=>Array.from({length:n},(_,i)=>f(i));
+  const kp=[2,2,3,2,1,2,3,4,3,2,2,1,2,3,3,5,4,3,2,2,3,2,2,3].map((v,i,a)=>({t:now-(a.length-1-i)*108e5,v}));
+  const sw=r(288,i=>({t:now-(287-i)*3e5,v:Math.round(395+55*Math.sin(i/38)+22*Math.sin(i/7))}));
+  const bz=r(288,i=>({t:now-(287-i)*3e5,v:+(-1.2+4.5*Math.sin(i/21)+1.3*Math.sin(i/4)-(i>200&&i<240?4:0)).toFixed(1)}));
+  const xr=r(72,i=>({t:now-(71-i)*3e5,v:Math.max(6e-7,2.1e-6*(1+.3*Math.sin(i/6))+(i>40&&i<55?4.8e-6*Math.exp(-Math.abs(i-44)/5):0))}));
+  return{kp,sw,bz,xr,dn:r(1,()=>5.8)[0],ssn:{v:112,t:'sample'},f107:148,alerts:[
+    {t:now-72e5,m:'ALERT: Geomagnetic K-index of 5 expected'},
+    {t:now-21e6,m:'SUMMARY: X-ray event exceeded C4'},
+    {t:now-5e7,m:'WATCH: Geomagnetic storm category G1 predicted'},
+    {t:now-9e7,m:'ALERT: Type II radio emission'}],live:false};
+}
+
+async function j(p){const r=await fetch(API+p,{cache:'no-store'});if(!r.ok)throw 0;return r.json()}
+function tbl(a){const h=a[0],o=h.reduce((m,k,i)=>(m[k]=i,m),{});return a.slice(1).map(r=>{const x={};for(const k in o)x[k]=r[o[k]];return x})}
+const T=s=>Date.parse(s.replace(' ','T')+(/Z|\+/.test(s)?'':'Z'));
+
+async function load(){
+  try{
+    const [k,pl,mg,xr,ci,al]=await Promise.all([
+      j('products/noaa-planetary-k-index.json'),j('products/solar-wind/plasma-5-minute.json'),
+      j('products/solar-wind/mag-5-minute.json'),j('json/goes/primary/xrays-6-hour.json'),
+      j('json/solar-cycle/observed-solar-cycle-indices.json'),j('products/alerts.json')]);
+    const kpR=(Array.isArray(k[0])?tbl(k):k).slice(-24).map(x=>({t:T(x.time_tag),v:+(x.Kp??x.kp_index)}));
+    const p=tbl(pl).filter(x=>x.speed!=null),m=tbl(mg).filter(x=>x.bz_gsm!=null);
+    const last=ci[ci.length-1];
+    D={kp:kpR,
+      sw:p.slice(-288).map(x=>({t:T(x.time_tag),v:+x.speed})),
+      bz:m.slice(-288).map(x=>({t:T(x.time_tag),v:+x.bz_gsm})),
+      dn:+p[p.length-1].density,
+      xr:xr.filter(x=>x.energy==='0.1-0.8nm'&&x.flux>0).map(x=>({t:T(x.time_tag),v:+x.flux})),
+      ssn:{v:Math.round(last.ssn),t:last['time-tag']},f107:Math.round(last['f10.7']),
+      alerts:al.slice(0,5).map(a=>({t:T(a.issue_datetime),m:(a.message.split(/\r?\n/).find(l=>/^(ALERT|WATCH|WARNING|SUMMARY|CONTINUED ALERT|EXTENDED WARNING):/.test(l))||'Bulletin').trim()})),
+      live:true};
+  }catch(e){D=D&&D.live?D:sample()}
+  render();
+}
+
+function flare(f){
+  const c=f<1e-7?['A',1e-8]:f<1e-6?['B',1e-7]:f<1e-5?['C',1e-6]:f<1e-4?['M',1e-5]:['X',1e-4];
+  return c[0]+(f/c[1]).toFixed(1);
+}
+const kpCol=v=>v>=5?css('--bad'):v>=4?css('--warn'):css('--ok');
+function kpLabel(v){return v>=5?'Storm level G'+Math.min(5,Math.floor(v)-4):v>=4?'Active':v>=3?'Unsettled':'Quiet'}
+const fmt=t=>new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+function line(id,d,o){
+  const W=600,H=170,L=44,R=8,Tp=8,B=22,svg=$(id);
+  const ys=d.map(x=>o.log?Math.log10(x.v):x.v);
+  let lo=o.min??Math.min(...ys),hi=o.max??Math.max(...ys);if(hi===lo)hi=lo+1;
+  const pad=(hi-lo)*.08;if(o.min==null)lo-=pad;if(o.max==null)hi+=pad;
+  const t0=d[0].t,t1=d[d.length-1].t,X=t=>L+(t-t0)/(t1-t0||1)*(W-L-R),Y=v=>Tp+(1-(v-lo)/(hi-lo))*(H-Tp-B);
+  let s='';
+  (o.ticks||[0,.5,1].map(f=>lo+f*(hi-lo))).forEach(v=>{
+    const lb=o.log?'1e'+Math.round(v):(Math.abs(v)>=100?Math.round(v):+v.toFixed(1));
+    s+=`<line class="gl" x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L-6}" y="${Y(v)+3}" text-anchor="end">${lb}</text>`});
+  if(o.zero&&lo<0&&hi>0)s+=`<line x1="${L}" x2="${W-R}" y1="${Y(0)}" y2="${Y(0)}" stroke="${css('--mute')}" stroke-dasharray="3 3"/>`;
+  if(o.bands)o.bands.forEach(b=>{s+=`<line x1="${L}" x2="${W-R}" y1="${Y(b[0])}" y2="${Y(b[0])}" stroke="${css('--warn')}" stroke-dasharray="2 4" opacity=".7"/><text class="ax" x="${W-R}" y="${Y(b[0])-3}" text-anchor="end">${b[1]}</text>`});
+  const pts=d.map((x,i)=>X(x.t).toFixed(1)+','+Y(ys[i]).toFixed(1)).join(' ');
+  s+=`<polyline fill="none" stroke="${o.c||css('--acc')}" stroke-width="1.6" stroke-linejoin="round" points="${pts}"/>`;
+  s+=`<text class="ax" x="${L}" y="${H-5}">${new Date(t0).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</text><text class="ax" x="${W-R}" y="${H-5}" text-anchor="end">${new Date(t1).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</text>`;
+  svg.innerHTML=s;
+}
+
+function kpBars(){
+  const d=D.kp,W=600,H=170,L=28,B=22,Tp=8,bw=(W-L-8)/d.length;
+  const Y=v=>Tp+(1-v/9)*(H-Tp-B);let s='';
+  [0,3,5,9].forEach(v=>s+=`<line class="gl" x1="${L}" x2="${W-8}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L-5}" y="${Y(v)+3}" text-anchor="end">${v}</text>`);
+  d.forEach((x,i)=>s+=`<rect x="${(L+i*bw+1).toFixed(1)}" y="${Y(x.v).toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${(H-B-Y(x.v)).toFixed(1)}" fill="${kpCol(x.v)}"/>`);
+  s+=`<text class="ax" x="${L}" y="${H-5}">${new Date(d[0].t).toLocaleDateString([], {month:'short',day:'numeric'})}</text><text class="ax" x="${W-8}" y="${H-5}" text-anchor="end">${new Date(d[d.length-1].t).toLocaleDateString([], {month:'short',day:'numeric'})}</text>`;
+  $('kpChart').innerHTML=s;
+}
+
+function render(){
+  const kp=D.kp[D.kp.length-1].v,sw=D.sw[D.sw.length-1],bz=D.bz[D.bz.length-1],xr=D.xr[D.xr.length-1];
+  const kpEl=$('kp');kpEl.textContent=kp.toFixed(kp%1?2:0);kpEl.style.color=kpCol(kp);$('kpSub').textContent=kpLabel(kp)+' · scale 0–9';
+  $('sp').firstChild.textContent=Math.round(sw.v);
+  $('spSub').textContent=sw.v>600?'High-speed stream':sw.v>450?'Elevated':'Near background (~400)';
+  $('bz').firstChild.textContent=bz.v.toFixed(1);$('bz').style.color=bz.v<-5?css('--bad'):'';
+  $('bzSub').textContent=bz.v<-5?'Strongly southward, storm-driving':bz.v<0?'Southward':'Northward';
+  const f=flare(xr.v),mx=Math.max(...D.xr.map(x=>x.v));
+  $('fl').textContent=f;$('fl').style.color=xr.v>=1e-5?css('--bad'):xr.v>=1e-6?css('--warn'):'';
+  $('flSub').textContent='6 h peak: '+flare(mx);
+  $('ssn').textContent=D.ssn.v;$('ssnSub').textContent='F10.7 radio flux: '+D.f107+' sfu · '+D.ssn.t;
+  $('dn').firstChild.textContent=D.dn.toFixed(1);
+  kpBars();
+  line('xChart',D.xr,{log:true,min:-8,max:-4,ticks:[-8,-7,-6,-5,-4],bands:[[-6,'C'],[-5,'M'],[-4,'X']]});
+  line('sChart',D.sw,{c:css('--acc')});
+  line('bChart',D.bz,{zero:true,c:css('--mute')});
+  $('ev').innerHTML=D.alerts.map(a=>`<tr><td class="mono">${fmt(a.t)}</td><td>${a.m.replace(/</g,'&lt;')}</td></tr>`).join('');
+  $('dot').className='dot'+(D.live?' live':'');
+  $('status').textContent=D.live?'Live NOAA SWPC data · updated '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'Sample data (live feed unreachable from this page)';
+}
+load();setInterval(load,3e5);
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>D&&render());
+</script>
+</body>
+</html>
